@@ -9,7 +9,7 @@ Built for the **Pro Hackathon 2026 (Rise In × Stellar) — Genesis Track**.
 ### Deploy (Vercel)
 
 - GitHub: [ysfadm/LiraShield](https://github.com/ysfadm/LiraShield)
-- **Root Directory must be `frontend`** (also set in `vercel.json`)
+- In Vercel: **Settings → Build and Deployment → Root Directory** → set to `frontend` (do not put this in `vercel.json`; that property is invalid there)
 - Copy `frontend/.env.example` → Vercel Environment Variables (`NEXT_PUBLIC_*`, plus server secrets if used)
 
 ## 1. Problem & Value Proposition
