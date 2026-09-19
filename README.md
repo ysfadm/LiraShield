@@ -6,6 +6,12 @@ showing crypto jargon, and **without inventing an APY** on testnet.
 
 Built for the **Pro Hackathon 2026 (Rise In × Stellar) — Genesis Track**.
 
+### Deploy (Vercel)
+
+- GitHub: [ysfadm/LiraShield](https://github.com/ysfadm/LiraShield)
+- **Root Directory must be `frontend`** (also set in `vercel.json`)
+- Copy `frontend/.env.example` → Vercel Environment Variables (`NEXT_PUBLIC_*`, plus server secrets if used)
+
 ## 1. Problem & Value Proposition
 
 For SMEs and freelancers in Turkey, cash held in TRY loses value quickly under
