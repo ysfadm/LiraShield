@@ -32,6 +32,7 @@ import {
   MOCK_TRY_PER_USDC_RATE,
 } from "@/lib/anchor-sep";
 import { formatTry, formatUsd } from "@/lib/format";
+import { scaledAmountToNumber } from "@/lib/stellar";
 import {
   clearTransactionHistory,
   loadTransactionHistory,
@@ -75,7 +76,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (walletChecked && !walletAddress) {
-      router.replace("/");
+      router.replace("/login");
     }
   }, [router, walletChecked, walletAddress]);
 
@@ -154,17 +155,29 @@ export default function DashboardPage() {
   }
 
   const tryValue = Math.max(0, protectedTryBalanceFromHistory(history));
-  const usdValue = tryValue / MOCK_TRY_PER_USDC_RATE;
+  const uiApproxUsd = tryValue / MOCK_TRY_PER_USDC_RATE;
+  const onChainUsd =
+    position && position.estimatedUsdcValue > BigInt(0)
+      ? scaledAmountToNumber(position.estimatedUsdcValue)
+      : 0;
+  const hasOnChainPosition = !!position && position.usdcShares > BigInt(0);
+  const usdValue = hasOnChainPosition ? onChainUsd : uiApproxUsd;
+  const usdSource: "on-chain" | "ui-approx" | "none" = hasOnChainPosition
+    ? "on-chain"
+    : tryValue > 0
+      ? "ui-approx"
+      : "none";
+  const canWithdraw = hasOnChainPosition || tryValue > 0;
   const lastTxHash = history.find((item) => item.txHash)?.txHash ?? null;
   const positionStatus = loading
     ? "Syncing"
-    : position && position.usdcShares > BigInt(0)
+    : hasOnChainPosition
       ? "Active"
       : "Ready";
   const routeSteps = ["TRY", "USDC", "Vault", "IBAN"];
   const systemStatus = [
     { label: "Passkey sign-in", value: "Connected" },
-    { label: "Bank rail", value: vaultAddress ? "Ready" : "Preparing" },
+    { label: "FAST bridge", value: vaultAddress ? "Ready" : "Preparing" },
     { label: "Soroban vault", value: loading ? "Syncing" : "Live" },
     { label: "Dollar shield", value: positionStatus },
   ];
@@ -219,7 +232,7 @@ export default function DashboardPage() {
         walletAddress={walletAddress}
         vaultAddress={vaultAddress}
         passkeyConnected={passkeyConnected}
-        protectedActive={tryValue > 0}
+        protectedActive={hasOnChainPosition || tryValue > 0}
       />
 
       <section className="rounded-3xl border border-slate-800 bg-slate-900/80 p-5 shadow-2xl shadow-black/20 sm:p-6">
@@ -228,7 +241,7 @@ export default function DashboardPage() {
             <div className="mb-6 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300">
               <CircleCheck size={15} /> Dollar shield active
             </div>
-            <p className="text-sm text-slate-400">Protected TRY balance</p>
+            <p className="text-sm text-slate-400">Protected TRY (approx)</p>
             {loading ? (
               <div className="mt-3 h-12 w-48 animate-pulse rounded-2xl bg-slate-800" />
             ) : (
@@ -237,8 +250,18 @@ export default function DashboardPage() {
               </p>
             )}
             <p className="mt-3 text-sm text-slate-400">
-              Dollar shield {formatUsd(usdValue)} · withdraw to IBAN anytime. No
-              APY claimed on testnet.
+              Dollar shield{" "}
+              <span className="font-medium text-white">{formatUsd(usdValue)}</span>
+              {usdSource === "on-chain"
+                ? " · on-chain DeFindex estimate"
+                : usdSource === "ui-approx"
+                  ? " · approx from activity history"
+                  : ""}
+              . Withdraw to IBAN anytime. No APY claimed on testnet.
+            </p>
+            <p className="mt-1 text-xs text-slate-600">
+              TRY figure is from this browser&apos;s activity history; USD prefers
+              the live vault position when shares are present.
             </p>
 
             <div className="mt-6 flex flex-col gap-3 sm:flex-row">
@@ -251,7 +274,7 @@ export default function DashboardPage() {
               </button>
               <button
                 onClick={() => vaultAddress && setWithdrawOpen(true)}
-                disabled={!vaultAddress || tryValue <= 0}
+                disabled={!vaultAddress || !canWithdraw}
                 className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border border-slate-700 bg-slate-950 px-5 py-3 font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <BanknoteArrowDown size={18} /> Withdraw to IBAN
@@ -273,7 +296,11 @@ export default function DashboardPage() {
                       {positionStatus}
                     </p>
                   )}
-                  <p className="text-sm text-slate-500">USD vault (DeFindex)</p>
+                  <p className="text-sm text-slate-500">
+                    {hasOnChainPosition
+                      ? formatUsd(onChainUsd)
+                      : "USD vault (DeFindex)"}
+                  </p>
                 </div>
                 <Vault className="text-sky-300" size={28} />
               </div>
@@ -292,8 +319,9 @@ export default function DashboardPage() {
             </div>
             <YieldEstimateCard
               usdValue={usdValue}
+              source={usdSource}
               loading={loading}
-              active={!loading && tryValue > 0}
+              active={!loading && (hasOnChainPosition || tryValue > 0)}
             />
           </div>
         </div>
@@ -354,8 +382,11 @@ export default function DashboardPage() {
       <section className="grid gap-6 lg:grid-cols-2">
         <BalanceReconciliationPanel
           protectedTryDisplay={formatTry(tryValue)}
+          onChainUsdDisplay={
+            hasOnChainPosition ? formatUsd(onChainUsd) : formatUsd(0)
+          }
           vaultConfigured={!!vaultAddress}
-          positionActive={!!position && position.usdcShares > BigInt(0)}
+          positionActive={hasOnChainPosition}
           loading={loading}
           lastSyncedAt={lastSyncedAt}
         />

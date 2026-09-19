@@ -2,10 +2,10 @@
 
 **Live demo:** [https://lira-shield.vercel.app](https://lira-shield.vercel.app)
 
-A non-custodial Stellar vault that turns TRY into a **USD inflation shield**
+A Stellar testnet vault that turns TRY into a **USD inflation shield**
 behind a familiar bank rail: FAST deposit in, IBAN withdraw out — without
 showing crypto jargon, and **without inventing an APY** on testnet.
-
+Passkey for sign-in; a classic bridge account handles the SEP rail on this demo.
 Built for the **Pro Hackathon 2026 (Rise In × Stellar) — Genesis Track**.
 
 ## 1. Problem & Value Proposition
@@ -35,32 +35,31 @@ flowchart LR
     U[User] -->|Passkey / WebAuthn| W[Smart Wallet<br/>passkey-kit]
     U -->|Deposit TRY| A[TR Mock Anchor<br/>SEP-1/10/6/12/38]
     A -->|real testnet USDC| BR[Anchor Bridge Account<br/>classic G-address]
-    BR -->|SAC transfer / sweep| W
-    W -->|shield_usdc| V[LiraShield Vault<br/>Soroban Contract]
+    BR -->|Soroswap to BlendUSDC| BR
+    BR -->|shield_usdc| V[LiraShield Vault<br/>Soroban Contract]
     V -->|USDC deposit| D[DeFindex Vault<br/>USD position]
     D -->|shares| V
-    V -->|position| U
+    V -->|position keyed to BR| BR
 
-    V -.unshield_usdc.-> W
-    W -.SAC transfer + memo.-> BR
-    BR -.SEP-6 withdraw.-> A
+    V -.unshield_usdc_to.-> BR
+    BR -.Soroswap + memo payment.-> A
     A -.IBAN/FAST payout.-> U
 ```
 
-Flow summary: **User → Passkey → TR Mock Anchor (SEP-6) → Bridge Account →
-Soroban Vault (`shield_usdc`) → DeFindex**, and the reverse on withdrawal.
-Because the anchor handles TRY↔USDC conversion on its side, the main path does
-not need a Soroswap step; `deposit_and_shield` / `withdraw_to_lira` (functions
-that swap via Soroswap) are an alternative path when the user already holds an
-on-chain TRY token.
+Flow summary: **User → Passkey (login) → TR Mock Anchor (SEP-6) → Bridge Account
+→ Soroswap (anchor USDC↔BlendUSDC) → Soroban Vault (`shield_usdc`) → DeFindex**,
+and the reverse on withdrawal. On this testnet demo the vault position is keyed
+to the **bridge `G…`**, not the passkey `C…`. Because the anchor handles
+TRY↔USDC conversion on its side, the main path does not call the in-contract
+Soroswap helpers; `deposit_and_shield` / `withdraw_to_lira` are an alternative
+path when the user already holds an on-chain TRY token.
 
 > **Why a bridge account?** SEP-10 login requires a classic Ed25519 signature,
 > and the anchor can only send USDC to a classic `G…`/`M…` address — not directly
 > to the Passkey smart wallet's `C…` (contract) address. So a lightweight classic
-> key stored in the browser (`lib/bridge-account.ts`), never shown to the user,
-> talks to the anchor; incoming USDC is swept immediately into the user's real
-> wallet (`shield_usdc`).
-
+> key stored in the browser (`lib/bridge-account.ts`), never shown as a seed
+> phrase, talks to the anchor and currently also signs vault shield/unshield
+> calls. Production should move this to a limited backend operator.
 ### Repo structure
 
 ```text
@@ -76,7 +75,8 @@ lirashield/
 ├── frontend/
 │   ├── src/
 │   │   ├── app/
-│   │   │   ├── page.tsx              # Passkey login screen
+│   │   │   ├── page.tsx              # Landing
+│   │   │   ├── login/page.tsx        # Passkey login
 │   │   │   ├── dashboard/page.tsx    # Balance cards + actions
 │   │   │   └── api/
 │   │   │       ├── passkey/relay/route.ts       # Fee-sponsored send via relayer
@@ -96,6 +96,14 @@ lirashield/
 └── README.md
 ```
 
+> **Custody note (testnet honesty):** Passkey is the sign-in identity
+> (smart wallet `C…`). SEP-10 and classic USDC delivery require a classic
+> `G…` account, so a per-tab bridge key in `sessionStorage` talks to the
+> anchor and currently also signs `shield_usdc` / `unshield_*`. On-chain
+> positions are keyed to that bridge address. This is a deliberate testnet
+> adapter — production should move the bridge to a limited backend operator
+> (see §8 roadmap). The UI labels both addresses and prefers the on-chain
+> DeFindex USD estimate over activity-history TRY for the dollar shield.
 ## 3. Stellar Skills References
 
 This project was built with reference to the following official Stellar skill
@@ -160,13 +168,13 @@ server-only environment variables; do not enable mock mode in production.
 
 ## 5. Testnet Deployment Addresses
 
-| Component                           | Contract ID / Address                                      |
-| ----------------------------------- | ---------------------------------------------------------- |
-| LiraShield Vault                    | `CD5Q274Y3XC2HQA5ZHTGQHQHFRX4O7LURDPRWH4G5MWMFJLZRDJKLF25` |
-| TRY Token (SAC, LiraShield issuer)  | `CDLR5NMVHRM2KYYZ5C774EV4U3PYBSYSGSNYCHKREYX2TZP6337CGHGL` |
-| USDC Token (BlendUSDC, vault config)| `CAQCFVLOBK5GIULPNZRGATJJMIZL5BSP7X5YJVMGCPTUEPFM4AVSRCJU` |
-| Soroswap Router (testnet)           | `CCJUD55AG6W5HAI5LRVNKAE5WDP5XGZBUDS5WNTIVDU7O264UZZE7BRD` |
-| DeFindex Vault (PaltaLabs, testnet) | `CBMVK2JK6NTOT2O4HNQAIQFJY232BHKGLIMXDVQVHIIZKDACXDFZDWHN` |
+| Component                           | Contract ID / Address                                      | Explorer |
+| ----------------------------------- | ---------------------------------------------------------- | -------- |
+| LiraShield Vault                    | `CD5Q274Y3XC2HQA5ZHTGQHQHFRX4O7LURDPRWH4G5MWMFJLZRDJKLF25` | [Expert](https://stellar.expert/explorer/testnet/contract/CD5Q274Y3XC2HQA5ZHTGQHQHFRX4O7LURDPRWH4G5MWMFJLZRDJKLF25) |
+| TRY Token (SAC, LiraShield issuer)  | `CDLR5NMVHRM2KYYZ5C774EV4U3PYBSYSGSNYCHKREYX2TZP6337CGHGL` | [Expert](https://stellar.expert/explorer/testnet/contract/CDLR5NMVHRM2KYYZ5C774EV4U3PYBSYSGSNYCHKREYX2TZP6337CGHGL) |
+| USDC Token (BlendUSDC, vault config)| `CAQCFVLOBK5GIULPNZRGATJJMIZL5BSP7X5YJVMGCPTUEPFM4AVSRCJU` | [Expert](https://stellar.expert/explorer/testnet/contract/CAQCFVLOBK5GIULPNZRGATJJMIZL5BSP7X5YJVMGCPTUEPFM4AVSRCJU) |
+| Soroswap Router (testnet)           | `CCJUD55AG6W5HAI5LRVNKAE5WDP5XGZBUDS5WNTIVDU7O264UZZE7BRD` | [Expert](https://stellar.expert/explorer/testnet/contract/CCJUD55AG6W5HAI5LRVNKAE5WDP5XGZBUDS5WNTIVDU7O264UZZE7BRD) |
+| DeFindex Vault (PaltaLabs, testnet) | `CBMVK2JK6NTOT2O4HNQAIQFJY232BHKGLIMXDVQVHIIZKDACXDFZDWHN` | [Expert](https://stellar.expert/explorer/testnet/contract/CBMVK2JK6NTOT2O4HNQAIQFJY232BHKGLIMXDVQVHIIZKDACXDFZDWHN) |
 
 > **Why two different "USDC" tokens?** TR Mock Anchor issues its own USDC
 > (issuer `GBBD47IF...`), but DeFindex testnet vaults only support **BlendUSDC**
@@ -177,19 +185,24 @@ server-only environment variables; do not enable mock mode in production.
 > `buildRouterSwapTx`/`buildSacApproveTx` in `lib/soroban-client.ts`. The vault
 > contract itself always works with a single "USDC" (BlendUSDC); bridging stays
 > entirely in the anchor integration layer.
+>
+> **20-second jury diagram:**
+> `TRY (FAST) → Anchor USDC → Soroswap → BlendUSDC → LiraShield Vault → DeFindex`
+> and reverse on withdraw. Dual-USDC is a testnet liquidity constraint, not a
+> product feature.
 
 ### Test steps
 
-1. `make contract-test` — 7 unit tests (initialize, paths with and without swap, slippage and insufficient-balance guards).
-2. Connect an account with Passkey on the `/` page.
+1. `make contract-test` — 8 unit tests (initialize, paths with and without swap, slippage and insufficient-balance guards).
+2. Connect an account with Passkey on the `/login` page.
 3. Use "Deposit and protect" to deposit some TRY — the main demo path receives
    real testnet USDC via TR Mock Anchor, converts from the bridge account via
    Soroswap to DeFindex's BlendUSDC asset, and deposits with `shield_usdc`.
-4. Confirm `usdc_shares` increased via `get_user_position`.
+4. Confirm `usdc_shares` increased via `get_user_position` (keyed to the FAST
+   bridge `G…` address on this demo).
 5. Use "Withdraw to IBAN" to withdraw some — `unshield_usdc`, then BlendUSDC →
    anchor USDC Soroswap conversion, memo'd treasury transfer, and SEP-6 off-ramp
    complete; confirm the balance dropped.
-
 `deposit_and_shield` and `withdraw_to_lira` are alternative contract paths used
 when the user already holds an on-chain TRY asset and working TRY/USDC Soroswap
 liquidity. They are not part of the testnet demo flow; the main demo does not
@@ -199,12 +212,16 @@ call them because the testnet TRY pool has no liquidity.
 
 - Passkey/smart wallet login is the only auth path; binding an external wallet
   (Freighter, etc.) was intentionally removed for the MVP.
+- On the live demo path, the FAST bridge `G…` (not the passkey `C…`) is the
+  vault position owner — see the custody note under §2. Do not pitch this as
+  "passkey holds the DeFindex shares" until roadmap item 2 ships.
 - Anchor integration is written against a real SEP-1/10/6/12/38 service (TR Mock
   Anchor); the same code can move to any real mainnet anchor by changing only
   `NEXT_PUBLIC_ANCHOR_HOME_DOMAIN`.
 - `NEXT_PUBLIC_ANCHOR_MODE=mock` is a fallback for demo reliability only; the
   primary path is always the real anchor.
-
+- Keep `frontend/.env.example` vault IDs in sync with this README table and
+  with the deployed Vercel env (`CD5Q274Y…` as of this write-up).
 ## 7. Launch Checklist
 
 - Current WASM is produced with `make contract-build`; if a redeploy is needed,
@@ -222,10 +239,11 @@ call them because the testnet TRY pool has no liquidity.
   testnet flow can continue after a page refresh and the key is cleared when
   the tab closes. In production the bridge account should be a backend-
   controlled, limited, operation-based service.
-- The UI shows the **dollar shield** (USD value of the protected balance). It
-  does not claim a DeFindex APY on testnet; real yield is a roadmap item when
-  mainnet vault data is wired.
-
+- The UI shows the **dollar shield** preferring the on-chain DeFindex estimate
+  (`get_user_position.estimated_usdc_value`) when shares exist; the TRY figure
+  is an activity-history approximation for the bank-shaped UX. It does not
+  claim a DeFindex APY on testnet; real yield is a roadmap item when mainnet
+  vault data is wired.
 ## 8. SCF / InstaAward Roadmap
 
 Person continuing after the hackathon: **Yusuf (founder)** — product, frontend,

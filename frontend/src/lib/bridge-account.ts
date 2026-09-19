@@ -4,12 +4,16 @@ import { Keypair } from "@stellar/stellar-sdk";
  * TR Mock Anchor requires a classic Ed25519 keypair for SEP-10 login and as
  * the delivery address for USDC (contract/passkey addresses can't sign a SEP-10
  * challenge or receive a classic payment/claimable balance). This module
- * manages a per-session "anchor bridge" keypair, generated and kept client-side
- * only, then swept into the user's real smart wallet after each deposit.
+ * manages a per-tab "anchor bridge" keypair in sessionStorage.
  *
- * The user never sees a seed phrase: it's presented in the UI as the IBAN-linked
- * account, and only ever used to sign anchor traffic. The secret is kept
- * only for the current browser tab so interrupted testnet flows can resume.
+ * On the current testnet demo path, vault `shield_usdc` / `unshield_*` calls are
+ * also signed by this bridge account — so on-chain positions are keyed to the
+ * bridge G-address, not the passkey smart wallet C-address. Production should
+ * move the bridge to a limited backend operator (see README roadmap).
+ *
+ * The user never sees a seed phrase: the UI labels this as the FAST bridge
+ * account. The secret lives only for the current browser tab so interrupted
+ * testnet flows can resume, and clears when the tab closes.
  */
 let bridgeKeypair: Keypair | null = null;
 const BRIDGE_SECRET_KEY = "lirashield.anchorBridgeSecret";

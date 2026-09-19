@@ -4,6 +4,8 @@ const DISCLOSURES = [
   "Testnet demo — no real money at risk",
   "Product claim today: inflation shield (USD) + FAST/IBAN on-ramp — not yield",
   "No APY is shown or implied; DeFindex holds the position for future real yield",
+  "Passkey signs you in; the FAST rail uses a per-tab classic bridge G-address (SEP-10 / G-payment constraint). Vault positions are keyed to that bridge account on testnet — not the passkey C-address",
+  "Protected TRY in the UI is an activity-history approximation; dollar value prefers the on-chain DeFindex estimate when available",
   "Bank/KYC side of the anchor rail is simulated; the Stellar side is real testnet",
   "The DeFindex vault is a third-party protocol; LiraShield does not audit it",
   "Not investment advice — hackathon demo only",

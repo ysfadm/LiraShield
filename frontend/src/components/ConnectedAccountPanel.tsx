@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Copy, Fingerprint, ShieldCheck, Wallet } from "lucide-react";
+import { Copy, Fingerprint, Landmark, Wallet } from "lucide-react";
 import { shortenAddress } from "@/lib/format";
 import { stellarExpertAccountUrl } from "@/lib/stellar";
 
@@ -39,7 +39,8 @@ export function ConnectedAccountPanel({
         <div>
           <h2 className="font-semibold text-white">Connected account</h2>
           <p className="text-sm text-slate-500">
-            Passkey wallet and dollar-shield vault ID
+            Passkey for sign-in · classic bridge G-address for the FAST rail
+            (testnet)
           </p>
         </div>
         {copied && (
@@ -52,14 +53,17 @@ export function ConnectedAccountPanel({
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
           <div className="mb-3 flex items-center gap-2 text-xs uppercase tracking-[0.16em] text-slate-500">
-            <Wallet size={13} /> Account ID
+            <Wallet size={13} /> Passkey wallet
           </div>
           <p className="break-all font-mono text-sm text-white">
             {shortenAddress(walletAddress, 8, 6)}
           </p>
+          <p className="mt-1 text-xs text-slate-600">
+            Smart wallet (C…) — login identity
+          </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <button
-              onClick={() => copy("Account ID", walletAddress)}
+              onClick={() => copy("Passkey wallet", walletAddress)}
               className="inline-flex items-center gap-1.5 rounded-full border border-slate-800 px-3 py-1 text-xs text-slate-300 hover:bg-slate-900"
             >
               <Copy size={12} /> Copy
@@ -83,26 +87,44 @@ export function ConnectedAccountPanel({
             {passkeyConnected ? "Connected" : "Not connected"}
           </p>
           <p className="mt-1 text-xs text-slate-500">
-            Sign-in uses your device identity
+            Device WebAuthn — not the on-chain position holder on this demo
           </p>
         </div>
 
         <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
           <div className="mb-3 flex items-center gap-2 text-xs uppercase tracking-[0.16em] text-slate-500">
-            <ShieldCheck size={13} /> Dollar shield
+            <Landmark size={13} /> FAST bridge
           </div>
           <p className="text-lg font-semibold text-white">
-            {protectedActive ? "Active" : "Ready"}
+            {protectedActive ? "Position active" : "Ready"}
           </p>
           {vaultAddress ? (
-            <button
-              onClick={() => copy("Vault ID", vaultAddress)}
-              className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-slate-800 px-3 py-1 text-xs text-slate-300 hover:bg-slate-900"
-            >
-              <Copy size={12} /> Copy vault
-            </button>
+            <>
+              <p className="mt-1 break-all font-mono text-xs text-slate-500">
+                {shortenAddress(vaultAddress, 8, 6)}
+              </p>
+              <p className="mt-1 text-xs text-slate-600">
+                Classic G… — SEP-10 + vault position key (tab session)
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  onClick={() => copy("FAST bridge", vaultAddress)}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-slate-800 px-3 py-1 text-xs text-slate-300 hover:bg-slate-900"
+                >
+                  <Copy size={12} /> Copy bridge
+                </button>
+                <a
+                  href={stellarExpertAccountUrl(vaultAddress)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-full border border-slate-800 px-3 py-1 text-xs text-slate-400 hover:text-emerald-300"
+                >
+                  Explorer
+                </a>
+              </div>
+            </>
           ) : (
-            <p className="mt-3 text-xs text-slate-500">Vault is preparing</p>
+            <p className="mt-3 text-xs text-slate-500">Bridge is preparing</p>
           )}
         </div>
       </div>

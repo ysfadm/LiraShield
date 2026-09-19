@@ -16,9 +16,11 @@ import {
 } from "@/lib/soroban-client";
 import {
   MAX_TRANSACTION_AMOUNT,
+  scaledAmountToNumber,
   stellarExpertTxUrl,
   USDC_TOKEN_CONTRACT_ID,
 } from "@/lib/stellar";
+import { MOCK_TRY_PER_USDC_RATE } from "@/lib/anchor-sep";
 import { createTransactionHistoryItem } from "@/lib/transaction-history";
 import type { TransactionHistoryItem } from "@/lib/transaction-history";
 import { ImpactPreview } from "@/components/ImpactPreview";
@@ -64,6 +66,13 @@ export function FastWithdrawModal({
 
   if (!open) return null;
 
+  const onChainTryApprox =
+    position && position.estimatedUsdcValue > BigInt(0)
+      ? scaledAmountToNumber(position.estimatedUsdcValue) * MOCK_TRY_PER_USDC_RATE
+      : 0;
+  const effectiveTryBalance =
+    protectedTryBalance > 0 ? protectedTryBalance : onChainTryApprox;
+
   function reset() {
     setAmount("");
     setIban("");
@@ -97,17 +106,17 @@ export function FastWithdrawModal({
       ) {
         throw new Error("No protected balance to withdraw.");
       }
-      if (protectedTryBalance <= 0) {
+      if (effectiveTryBalance <= 0) {
         throw new Error("No protected balance to withdraw.");
       }
-      if (value > protectedTryBalance) {
+      if (value > effectiveTryBalance) {
         throw new Error("This amount exceeds your protected balance.");
       }
       const sharesNeeded =
         (position.usdcShares * BigInt(Math.ceil(value * 100)) +
-          BigInt(Math.ceil(protectedTryBalance * 100)) -
+          BigInt(Math.ceil(effectiveTryBalance * 100)) -
           BigInt(1)) /
-        BigInt(Math.ceil(protectedTryBalance * 100));
+        BigInt(Math.ceil(effectiveTryBalance * 100));
       if (sharesNeeded > position.usdcShares) {
         throw new Error("This amount exceeds your protected balance.");
       }
@@ -253,7 +262,7 @@ export function FastWithdrawModal({
             <ImpactPreview
               kind="withdraw"
               amount={Number(amount)}
-              currentBalance={protectedTryBalance}
+              currentBalance={effectiveTryBalance}
             />
             {error && <p className="text-sm text-red-400">{error}</p>}
             <button
@@ -270,7 +279,7 @@ export function FastWithdrawModal({
             <ImpactPreview
               kind="withdraw"
               amount={Number(amount)}
-              currentBalance={protectedTryBalance}
+              currentBalance={effectiveTryBalance}
             />
             <div className="rounded-2xl bg-slate-950 p-4 text-sm text-slate-300">
               <div className="flex justify-between gap-3 py-1">
