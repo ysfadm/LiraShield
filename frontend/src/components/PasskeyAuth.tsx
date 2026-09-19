@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Fingerprint, Loader2 } from "lucide-react";
+import { CheckCircle2, Fingerprint, Loader2 } from "lucide-react";
 import {
   connectWalletSafely,
   getPasskeyKit,
@@ -9,8 +9,13 @@ import {
   rememberPasskeySession,
 } from "@/lib/passkey";
 
+export type PasskeyAuthAction = "connect" | "create";
+
 interface PasskeyAuthProps {
-  onAuthenticated: (walletAddress: string) => void;
+  onAuthenticated: (
+    walletAddress: string,
+    action: PasskeyAuthAction,
+  ) => void;
 }
 
 /** Passkey entry point: connect to an existing wallet or create a new one explicitly. */
@@ -19,6 +24,10 @@ export function PasskeyAuth({ onAuthenticated }: PasskeyAuthProps) {
     null,
   );
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<{
+    action: PasskeyAuthAction;
+    address: string;
+  } | null>(null);
 
   function formatError(value: unknown, fallback: string) {
     if (!(value instanceof Error)) return fallback;
@@ -29,9 +38,17 @@ export function PasskeyAuth({ onAuthenticated }: PasskeyAuthProps) {
     return value.message || fallback;
   }
 
+  async function finishAuth(address: string, action: PasskeyAuthAction) {
+    setSuccess({ action, address });
+    // Brief pause so the success state is readable before redirect.
+    await new Promise((resolve) => window.setTimeout(resolve, 900));
+    onAuthenticated(address, action);
+  }
+
   async function handleConnect() {
     setBusyAction("connect");
     setError(null);
+    setSuccess(null);
     try {
       if (!window.isSecureContext) {
         throw new Error(
@@ -39,7 +56,7 @@ export function PasskeyAuth({ onAuthenticated }: PasskeyAuthProps) {
         );
       }
       const contractId = await connectWalletSafely();
-      onAuthenticated(contractId);
+      await finishAuth(contractId, "connect");
     } catch (err) {
       setError(formatError(err, "Could not connect wallet."));
     } finally {
@@ -50,6 +67,7 @@ export function PasskeyAuth({ onAuthenticated }: PasskeyAuthProps) {
   async function handleCreate() {
     setBusyAction("create");
     setError(null);
+    setSuccess(null);
     try {
       if (!window.isSecureContext) {
         throw new Error(
@@ -61,12 +79,28 @@ export function PasskeyAuth({ onAuthenticated }: PasskeyAuthProps) {
       const { hash } = await relaySignedXdr(created.signedTx);
       await kit.confirmWalletCreation(created, hash);
       rememberPasskeySession(created.keyIdBase64, created.contractId);
-      onAuthenticated(created.contractId);
+      await finishAuth(created.contractId, "create");
     } catch (err) {
       setError(formatError(err, "Could not create wallet."));
     } finally {
       setBusyAction(null);
     }
+  }
+
+  if (success) {
+    return (
+      <div className="flex w-full flex-col items-center gap-3 rounded-2xl border border-emerald-400/30 bg-emerald-400/10 px-6 py-8 text-center">
+        <CheckCircle2 className="text-emerald-300" size={40} />
+        <p className="text-lg font-semibold text-white">
+          {success.action === "create"
+            ? "Wallet created successfully"
+            : "Wallet connected successfully"}
+        </p>
+        <p className="max-w-xs text-sm text-slate-400">
+          Opening your protected account…
+        </p>
+      </div>
+    );
   }
 
   return (
@@ -95,6 +129,16 @@ export function PasskeyAuth({ onAuthenticated }: PasskeyAuthProps) {
         )}
         Create new wallet
       </button>
+      {busyAction === "create" && (
+        <p className="max-w-sm text-center text-sm text-slate-400">
+          Confirm with your device passkey. Creating your wallet on Stellar…
+        </p>
+      )}
+      {busyAction === "connect" && (
+        <p className="max-w-sm text-center text-sm text-slate-400">
+          Confirm with your device passkey…
+        </p>
+      )}
       {error && (
         <p className="max-w-sm text-center text-sm text-red-400">{error}</p>
       )}

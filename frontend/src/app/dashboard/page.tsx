@@ -65,7 +65,13 @@ export default function DashboardPage() {
         !!window.localStorage.getItem("lirashield.walletAddress"),
     );
     setWalletChecked(true);
-  }, []);
+
+    const authToast = window.sessionStorage.getItem("lirashield.authToast");
+    if (authToast) {
+      window.sessionStorage.removeItem("lirashield.authToast");
+      pushToast(authToast);
+    }
+  }, [pushToast]);
 
   useEffect(() => {
     if (walletChecked && !walletAddress) {

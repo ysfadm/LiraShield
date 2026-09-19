@@ -2,13 +2,25 @@
 
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ShieldCheck } from "lucide-react";
-import { PasskeyAuth } from "@/components/PasskeyAuth";
+import {
+  PasskeyAuth,
+  type PasskeyAuthAction,
+} from "@/components/PasskeyAuth";
 
 export default function LoginPage() {
   const router = useRouter();
 
-  function handleAuthenticated(walletAddress: string) {
+  function handleAuthenticated(
+    walletAddress: string,
+    action: PasskeyAuthAction,
+  ) {
     window.localStorage.setItem("lirashield.walletAddress", walletAddress);
+    window.sessionStorage.setItem(
+      "lirashield.authToast",
+      action === "create"
+        ? "New wallet created. You are signed in."
+        : "Wallet connected. You are signed in.",
+    );
     router.push("/dashboard");
   }
 
