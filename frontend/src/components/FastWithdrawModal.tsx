@@ -34,6 +34,9 @@ interface FastWithdrawModalProps {
 
 type Step = "form" | "confirm" | "processing" | "done";
 
+/** Demo IBAN for hackathon flows — valid TR format, no real bank account. */
+const DEMO_IBAN = "TR000000000000000000000001";
+
 const withdrawTimeline = [
   "Unlocked from USD vault",
   "Converted to anchor USDC",
@@ -234,6 +237,19 @@ export function FastWithdrawModal({
                 placeholder="TR00 0000 0000 0000 0000 0000 00"
               />
             </label>
+            <button
+              type="button"
+              onClick={() => {
+                setIban(DEMO_IBAN);
+                setError(null);
+              }}
+              className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-left text-sm text-slate-300 transition hover:border-sky-500/40 hover:bg-slate-900"
+            >
+              <span className="font-medium text-sky-300">Use demo IBAN</span>
+              <span className="mt-0.5 block font-mono text-xs text-slate-500">
+                {DEMO_IBAN}
+              </span>
+            </button>
             <ImpactPreview
               kind="withdraw"
               amount={Number(amount)}
