@@ -1,16 +1,12 @@
 # LiraShield
 
+**Live demo:** [https://lira-shield.vercel.app](https://lira-shield.vercel.app)
+
 A non-custodial Stellar vault that turns TRY into a **USD inflation shield**
 behind a familiar bank rail: FAST deposit in, IBAN withdraw out — without
 showing crypto jargon, and **without inventing an APY** on testnet.
 
 Built for the **Pro Hackathon 2026 (Rise In × Stellar) — Genesis Track**.
-
-### Deploy (Vercel)
-
-- GitHub: [ysfadm/LiraShield](https://github.com/ysfadm/LiraShield)
-- In Vercel: **Settings → Build and Deployment → Root Directory** → set to `frontend` (do not put this in `vercel.json`; that property is invalid there)
-- Copy `frontend/.env.example` → Vercel Environment Variables (`NEXT_PUBLIC_*`, plus server secrets if used)
 
 ## 1. Problem & Value Proposition
 
