@@ -481,6 +481,27 @@ interface Sep6Transaction {
   stellar_transaction_id?: string;
 }
 
+interface CompletedSep6Transaction {
+  status: string;
+  amount_out: string;
+  message?: string;
+  stellar_transaction_id?: string;
+}
+
+function requireCompletedSep6(
+  transaction: Sep6Transaction,
+): CompletedSep6Transaction {
+  if (!transaction.amount_out) {
+    throw new Error("lirashield: anchor transaction is missing amount_out");
+  }
+  return {
+    status: transaction.status ?? "completed",
+    amount_out: transaction.amount_out,
+    message: transaction.message,
+    stellar_transaction_id: transaction.stellar_transaction_id,
+  };
+}
+
 interface PollSep6Options {
   publicKey?: string;
   usdcIssuer?: string;
@@ -492,7 +513,7 @@ async function pollSep6Transaction(
   token: string,
   id: string,
   options: PollSep6Options = {},
-) {
+): Promise<CompletedSep6Transaction> {
   let lastStatus = "unknown";
   let lastMessage = "";
   let lastTransaction: Sep6Transaction | null = null;
@@ -510,7 +531,9 @@ async function pollSep6Transaction(
           lastTransaction = transaction;
           lastStatus = transaction.status ?? lastStatus;
           lastMessage = transaction.message ?? lastMessage;
-          if (transaction.status === "completed") return transaction;
+          if (transaction.status === "completed") {
+            return requireCompletedSep6(transaction);
+          }
           if (transaction.status === "error") {
             throw new Error(
               `lirashield: anchor transaction failed (${transaction.message ?? "unknown error"})`,
@@ -541,7 +564,7 @@ async function pollSep6Transaction(
             lastTransaction?.amount_out ?? scaledUsdcToAmount(credited),
           stellar_transaction_id: lastTransaction?.stellar_transaction_id,
           message: lastTransaction?.message,
-        };
+        } satisfies CompletedSep6Transaction;
       }
     }
 
