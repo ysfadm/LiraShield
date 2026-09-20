@@ -1,6 +1,7 @@
 # LiraShield
 
-**Live demo:** [https://lira-shield.vercel.app](https://lira-shield.vercel.app)
+**Live demo:** [https://lira-shield.vercel.app](https://lira-shield.vercel.app)  
+**Pitch deck:** [Google Slides](https://docs.google.com/presentation/d/11gKCt_8BgynS3zruGzmPKZFAAozgmftt/edit?usp=sharing)
 
 A Stellar testnet vault that turns TRY into a **USD inflation shield**
 behind a familiar bank rail: FAST deposit in, IBAN withdraw out — without
