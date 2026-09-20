@@ -36,8 +36,8 @@ interface FastWithdrawModalProps {
 
 type Step = "form" | "confirm" | "processing" | "done";
 
-/** Demo IBAN for hackathon flows — valid TR format, no real bank account. */
-const DEMO_IBAN = "TR000000000000000000000001";
+/** Demo IBAN for hackathon flows — valid TR checksum, no real bank account. */
+const DEMO_IBAN = "TR330006100519786457841326";
 
 const withdrawTimeline = [
   "Unlocked from USD vault",

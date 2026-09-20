@@ -157,6 +157,12 @@ export const ANCHOR_HOME_DOMAIN =
 /** Fallback TRY-per-USDC rate used only when ANCHOR_MODE=mock. */
 export const MOCK_TRY_PER_USDC_RATE = 34.5;
 
+/** Demo IBAN that passes the mock anchor's TR checksum check. Not a real account. */
+export const DEMO_TRY_IBAN = "TR330006100519786457841326";
+
+const ANCHOR_POLL_ATTEMPTS = 90;
+const ANCHOR_POLL_INTERVAL_MS = 2000;
+
 interface AnchorEndpoints {
   webAuthEndpoint: string;
   transferServer: string;
@@ -269,7 +275,7 @@ async function ensureSep12Customer(
       first_name: "Lira",
       last_name: "Shield",
       email_address: "demo@lirashield.app",
-      bank_account_number: iban ?? "TR000000000000000000000000",
+      bank_account_number: iban ?? DEMO_TRY_IBAN,
     }),
   });
   if (!response.ok && response.status !== 202) {
@@ -447,25 +453,107 @@ export async function getExchangeQuote(
   };
 }
 
+async function classicUsdcBalance(
+  publicKey: string,
+  usdcIssuer: string,
+): Promise<bigint> {
+  const horizon = new Horizon.Server(HORIZON_URL);
+  try {
+    const account = await horizon.loadAccount(publicKey);
+    const line = account.balances.find(
+      (balance) =>
+        balance.asset_type !== "native" &&
+        "asset_code" in balance &&
+        balance.asset_code === "USDC" &&
+        balance.asset_issuer === usdcIssuer,
+    );
+    if (!line || !("balance" in line)) return BigInt(0);
+    return BigInt(Math.round(Number(line.balance) * 10 ** 7));
+  } catch {
+    return BigInt(0);
+  }
+}
+
+interface Sep6Transaction {
+  status?: string;
+  message?: string;
+  amount_out?: string;
+  stellar_transaction_id?: string;
+}
+
+interface PollSep6Options {
+  publicKey?: string;
+  usdcIssuer?: string;
+  startingUsdcScaled?: bigint;
+}
+
 async function pollSep6Transaction(
   transferServer: string,
   token: string,
   id: string,
+  options: PollSep6Options = {},
 ) {
-  for (let attempt = 0; attempt < 40; attempt += 1) {
-    const response = await fetch(`${transferServer}/transaction?id=${id}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const { transaction } = await response.json();
-    if (transaction.status === "completed") return transaction;
-    if (transaction.status === "error") {
-      throw new Error(
-        `lirashield: anchor transaction failed (${transaction.message ?? "unknown error"})`,
-      );
+  let lastStatus = "unknown";
+  let lastMessage = "";
+  let lastTransaction: Sep6Transaction | null = null;
+
+  for (let attempt = 0; attempt < ANCHOR_POLL_ATTEMPTS; attempt += 1) {
+    try {
+      const response = await fetch(`${transferServer}/transaction?id=${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      if (response.ok) {
+        const body = (await response.json()) as { transaction?: Sep6Transaction };
+        const transaction = body.transaction;
+        if (transaction) {
+          lastTransaction = transaction;
+          lastStatus = transaction.status ?? lastStatus;
+          lastMessage = transaction.message ?? lastMessage;
+          if (transaction.status === "completed") return transaction;
+          if (transaction.status === "error") {
+            throw new Error(
+              `lirashield: anchor transaction failed (${transaction.message ?? "unknown error"})`,
+            );
+          }
+        }
+      }
+    } catch (err) {
+      if (err instanceof Error && err.message.startsWith("lirashield:")) {
+        throw err;
+      }
     }
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+
+    if (
+      options.publicKey &&
+      options.usdcIssuer &&
+      options.startingUsdcScaled !== undefined
+    ) {
+      const current = await classicUsdcBalance(
+        options.publicKey,
+        options.usdcIssuer,
+      );
+      if (current > options.startingUsdcScaled) {
+        const credited = current - options.startingUsdcScaled;
+        return {
+          status: "completed",
+          amount_out:
+            lastTransaction?.amount_out ?? scaledUsdcToAmount(credited),
+          stellar_transaction_id: lastTransaction?.stellar_transaction_id,
+          message: lastTransaction?.message,
+        };
+      }
+    }
+
+    await new Promise((resolve) =>
+      setTimeout(resolve, ANCHOR_POLL_INTERVAL_MS),
+    );
   }
-  throw new Error("lirashield: timed out waiting for the anchor transaction");
+
+  const detail = lastMessage ? `${lastStatus} — ${lastMessage}` : lastStatus;
+  throw new Error(
+    `lirashield: timed out waiting for the anchor transaction (${detail})`,
+  );
 }
 
 export interface FastDepositResult {
@@ -597,21 +685,23 @@ export async function runFastDeposit(
   // Amount on /deposit is USDC. Sending TRY (e.g. 10000) exceeds the 300 USDC cap.
   // Prefer /deposit-exchange so the bank leg stays in TRY; fall back to /deposit
   // with the quoted USDC amount if the exchange endpoint rejects the request.
-  const depositExchangeUrl = new URL(`${transferServer}/deposit-exchange`);
-  depositExchangeUrl.searchParams.set(
-    "destination_asset",
-    `stellar:USDC:${usdcIssuer}`,
-  );
-  depositExchangeUrl.searchParams.set("source_asset", "iso4217:TRY");
-  depositExchangeUrl.searchParams.set("amount", tryAmountSep6);
-  depositExchangeUrl.searchParams.set("account", keypair.publicKey());
-  depositExchangeUrl.searchParams.set("type", "bank_account");
-  depositExchangeUrl.searchParams.set("funding_method", "bank_account");
-
-  let depositResponse = await fetch(depositExchangeUrl, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!depositResponse.ok) {
+  // TR Mock Anchor rejects SEP-38 `stellar:USDC:<issuer>` here and expects `USDC`.
+  const depositExchangeAttempts = ["USDC", `stellar:USDC:${usdcIssuer}`];
+  let depositResponse: Response | null = null;
+  for (const destinationAsset of depositExchangeAttempts) {
+    const depositExchangeUrl = new URL(`${transferServer}/deposit-exchange`);
+    depositExchangeUrl.searchParams.set("destination_asset", destinationAsset);
+    depositExchangeUrl.searchParams.set("source_asset", "iso4217:TRY");
+    depositExchangeUrl.searchParams.set("amount", tryAmountSep6);
+    depositExchangeUrl.searchParams.set("account", keypair.publicKey());
+    depositExchangeUrl.searchParams.set("type", "bank_account");
+    depositExchangeUrl.searchParams.set("funding_method", "bank_account");
+    depositResponse = await fetch(depositExchangeUrl, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (depositResponse.ok) break;
+  }
+  if (!depositResponse?.ok) {
     const depositUrl = new URL(`${transferServer}/deposit`);
     depositUrl.searchParams.set("asset_code", "USDC");
     depositUrl.searchParams.set("account", keypair.publicKey());
@@ -622,21 +712,36 @@ export async function runFastDeposit(
       headers: { Authorization: `Bearer ${token}` },
     });
   }
+  if (!depositResponse) {
+    throw new Error("lirashield: SEP-6 deposit request failed");
+  }
   await throwIfAnchorFailed("SEP-6 deposit request failed", depositResponse);
   const { id } = await depositResponse.json();
+
+  const startingUsdcScaled = await classicUsdcBalance(
+    keypair.publicKey(),
+    usdcIssuer,
+  );
 
   // Sandbox only: a real anchor is triggered by the actual bank transfer landing.
   const simulateResponse = await fetch(
     `${transferServer}/tx/${id}/simulate-bank-transfer`,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
       body: JSON.stringify({ amount: tryAmountSep6 }),
     },
   );
   await throwIfAnchorFailed("bank transfer simulation failed", simulateResponse);
 
-  const transaction = await pollSep6Transaction(transferServer, token, id);
+  const transaction = await pollSep6Transaction(transferServer, token, id, {
+    publicKey: keypair.publicKey(),
+    usdcIssuer,
+    startingUsdcScaled,
+  });
   const anchorUsdcAmountScaled = BigInt(
     Math.round(Number(transaction.amount_out) * 10 ** 7),
   );
@@ -756,7 +861,7 @@ export async function runFastWithdraw(
       body: JSON.stringify({
         userAddress,
         tryAmount: quote.buyAmount,
-        iban: iban ?? "TR000000000000000000000000",
+        iban: iban ?? DEMO_TRY_IBAN,
       }),
     });
     if (!response.ok) {
